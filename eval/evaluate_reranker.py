@@ -1,6 +1,6 @@
 """
 예시 script
-python evaluate_reranker_new.py \
+uv run evaluate_reranker.py \
     --model_names tomaarsen/Qwen3-Reranker-0.6B-seq-cls \
     --tasks Ko-StrategyQA AutoRAGRetrieval \
     --gpu_ids 0 1 \
@@ -32,7 +32,8 @@ from mteb.tasks.Retrieval.multilingual.XPQARetrieval import _LANG_CONVERSION, _l
 from mteb.tasks.Retrieval.multilingual.BelebeleRetrieval import BelebeleRetrieval, _EVAL_SPLIT
 from mteb.evaluation.evaluators.RetrievalEvaluator import DenseRetrievalExactSearch
 
-from wrappers import Qwen3RerankerWrapper, MxbaiRerankerWrapper, BGEGemmaRerankerWrapper
+from wrappers import Qwen3RerankerWrapper, MxbaiRerankerWrapper, BGEGemmaRerankerWrapper, JinaRerankerV3Wrapper
+from custom_mteb_tasks import SQuADKorV1Retrieval, WebFAQRetrieval
 
 _original_load_results_file = DenseRetrievalExactSearch.load_results_file
 
@@ -223,6 +224,13 @@ def evaluate_reranker_model(model_name: str, gpu_id: int, tasks: List[str], prev
                 use_bf16=True,
                 devices=[device],
             )
+        elif "jina-reranker-v3" in model_name.lower():
+            print(f"Using JinaRerankerV3Wrapper for {model_name}")
+            model = JinaRerankerV3Wrapper(
+                model_name,
+                device=device,
+                torch_dtype=torch.bfloat16,
+            )
         else:
             model = CrossEncoder(
                 model_name, 
@@ -231,17 +239,25 @@ def evaluate_reranker_model(model_name: str, gpu_id: int, tasks: List[str], prev
                 device=device,
             )
         
-        output_dir = output_base_dir / model_name.replace("/", "_")
+        output_dir = output_base_dir / model_name
         output_dir.mkdir(parents=True, exist_ok=True)
         
         for task in tasks:
             print(f"Running task: {task} / {model_name} on GPU {gpu_id}")
 
-            tasks_mteb = mteb.get_tasks(
-                tasks=[task],
-                languages=["kor-Kore", "kor-Hang", "kor_Hang"],
-                eval_splits=["test"] if task == "MultiLongDocRetrieval" else None,
-            )
+            # Handle custom tasks
+            if task == "SQuADKorV1Retrieval":
+                tasks_mteb = [SQuADKorV1Retrieval()]
+            elif task == "WebFAQRetrieval":
+                tasks_mteb = [WebFAQRetrieval()]
+            else:
+                # Standard MTEB tasks
+                tasks_mteb = mteb.get_tasks(
+                    tasks=[task],
+                    languages=["kor-Kore", "kor-Hang", "kor_Hang"],
+                    eval_splits=["test"] if task == "MultiLongDocRetrieval" else None,
+                )
+
             evaluation = MTEB(tasks=tasks_mteb)
 
             previous_results_path = previous_results_dir / (task + "_id.jsonl")
@@ -303,6 +319,7 @@ DEFAULT_MODEL_NAMES = [
     "sigridjineth/ko-reranker-v1.1",
     "Alibaba-NLP/gte-multilingual-reranker-base",
     "jinaai/jina-reranker-v2-base-multilingual",
+    "jinaai/jina-reranker-v3",
     "telepix/PIXIE-Spell-Reranker-Preview-0.6B",
     "tomaarsen/Qwen3-Reranker-0.6B-seq-cls",
     "tomaarsen/Qwen3-Reranker-4B-seq-cls",
@@ -320,7 +337,9 @@ DEFAULT_TASKS = [
     "XPQARetrieval",
     "MultiLongDocRetrieval",
     "MIRACLRetrieval",
-    "MrTidyRetrieval"
+    "MrTidyRetrieval",
+    "SQuADKorV1Retrieval",  # Custom task
+    "WebFAQRetrieval"       # Custom task
 ]
 DEFAULT_GPU_IDS = [0, 1, 2, 3, 4, 5, 6, 7]
 V2_ROOT = Path(__file__).resolve().parents[1]
