@@ -26,6 +26,11 @@ dependencies = [
 [project.optional-dependencies]
 transformers-v4 = ["transformers<5"]
 transformers-v5 = ["transformers>=5"]
+# ColBERT/late-interaction reranking(evaluate_colbert.py) 전용. pylate 는 ST==5.3.0,
+# transformers<=5.3.0 을 고정하므로 별도 extra 로 분리. reranking 은 encode+MaxSim 만
+# 쓰고 PLAID/fast-plaid 는 사용하지 않는다.
+#   uv sync --extra colbert && uv run --extra colbert python eval/evaluate_colbert.py ...
+colbert = ["pylate>=1.6.0"]
 
 [tool.uv]
 # 단일 universal lock 에서 두 extra 가 하나의 transformers 버전으로 합쳐지지 않도록 분기.
